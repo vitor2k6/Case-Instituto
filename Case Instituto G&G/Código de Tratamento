@@ -1,0 +1,101 @@
+import pandas as pd
+import numpy as np
+
+# 1. Carregar o arquivo pulando as linhas de títulos do Excel
+# O parâmetro skiprows=2 pula as linhas "Autoconceito" e "Social, Social..." 
+df = pd.read_csv('Dados Case 2026.xlsx - Dados - COMPLETO.csv', skiprows=2)
+
+# 2. Limpeza dos nomes das colunas
+# Remove quebras de linha (\n) e espaços em branco extras
+df.columns = [str(col).replace('\n', ' ').strip() for col in df.columns]
+
+# 3. Definição das Regras de Pontuação (Likert)
+# Positivas: Nunca=0, Às vezes=1, Sempre=2
+# Negativas: Nunca=2, Às vezes=1, Sempre=0
+map_pos = {'Nunca': 0, 'Às vezes': 1, 'Sempre': 2}
+map_neg = {'Nunca': 2, 'Às vezes': 1, 'Sempre': 0}
+
+# 4. Listas de perguntas para cada Dimensão (identificadas conforme a planilha)
+perguntas_negativas = [
+    'Acho que sou o pior da turma.', 
+    'Acho que sou o mais burro dos meus amigos.',
+    'Me considero o mais bobo dos meus amigos.', 
+    'Me sinto mais esquisito do que os outros.',
+    'Sinto que não consigo ajudar meus amigos', 
+    'Quando perco em algum jogo, prefiro ficar sozinho',
+    'Acho que sou muito preocupado', 
+    'Quando erro, me sinto muito mal.',
+    'Me considero muito nervoso', 
+    'Tenho muitos problemas.', 
+    'Tenho medo'
+]
+
+perguntas_positivas = [
+    'Me considero o mais esperto da classe.',
+    'Penso que sou o mais engraçado da classe.',
+    'Gosto de ser o líder nos trabalhos em grupo.',
+    'Imagino que sou o mais bondoso da classe',
+    'Meus colegas concordam com tudo o que falo.',
+    'Tomo muito cuidado com as coisas em casa.',
+    'Fico alegre quando estou com meus irmãos',
+    'Digo a verdade quando estou com minha família.',
+    'Quando ajudo em casa faço tudo certo.'
+]
+
+# 5. CONVERSÃO: Transforma o texto em números ANTES de somar
+# Criamos um DataFrame auxiliar apenas para os cálculos
+df_calculo = pd.DataFrame()
+
+for col in perguntas_negativas + perguntas_positivas:
+    if col in df.columns:
+        if col in perguntas_negativas:
+            df_calculo[col] = df[col].map(map_neg).fillna(1).astype(int)
+        else:
+            df_calculo[col] = df[col].map(map_pos).fillna(1).astype(int)
+
+# 6. Cálculo das Dimensões Numéricas
+# Escolar (Max 10)
+df['Autoconceito_Escolar'] = df_calculo[['Acho que sou o pior da turma.', 
+                                         'Me considero o mais esperto da classe.', 
+                                         'Quando erro, me sinto muito mal.', 
+                                         'Imagino que sou o mais bondoso da classe',
+                                         'Meus colegas concordam com tudo o que falo.']].sum(axis=1)
+
+# Familiar (Max 8)
+df['Autoconceito_Familiar'] = df_calculo[['Tomo muito cuidado com as coisas em casa.', 
+                                          'Fico alegre quando estou com meus irmãos',
+                                          'Digo a verdade quando estou com minha família.', 
+                                          'Quando ajudo em casa faço tudo certo.']].sum(axis=1)
+
+# Pessoal (Max 10)
+df['Autoconceito_Pessoal'] = df_calculo[['Acho que sou muito preocupado', 
+                                         'Me considero muito nervoso', 
+                                         'Tenho muitos problemas.', 
+                                         'Tenho medo', 
+                                         'Quando perco em algum jogo, prefiro ficar sozinho']].sum(axis=1)
+
+# Social (Max 12)
+df['Autoconceito_Social'] = df_calculo[['Acho que sou o mais burro dos meus amigos.', 
+                                        'Me considero o mais bobo dos meus amigos.',
+                                        'Me sinto mais esquisito do que os outros.', 
+                                        'Sinto que não consigo ajudar meus amigos',
+                                        'Penso que sou o mais engraçado da classe.', 
+                                        'Gosto de ser o líder nos trabalhos em grupo.']].sum(axis=1)
+
+# Autoconceito Geral (Soma total 0-40)
+df['Autoconceito_Geral'] = df['Autoconceito_Escolar'] + df['Autoconceito_Familiar'] + \
+                           df['Autoconceito_Pessoal'] + df['Autoconceito_Social']
+
+# 7. Padronização Final (Gênero, Bullying e Notas)
+df['Qual seu gênero?'] = df['Qual seu gênero?'].replace({'bi': 'Outros', ' Gay': 'Outros', 'ABu': 'Outros'})
+
+# Coluna de Bullying baseada na posição (coluna 10)
+df['Sofreu_Bullying'] = df.iloc[:, 10].apply(lambda x: 0 if 'Não fui vítima' in str(x) else 1)
+
+# Notas para formato numérico
+df['Nota Matemática'] = pd.to_numeric(df['Nota Matemática'], errors='coerce').fillna(0).astype(int)
+df['Nota Português'] = pd.to_numeric(df['Nota Português'], errors='coerce').fillna(0).astype(int)
+
+# 8. Exportação
+df.to_csv('Dados_PowerBI_Final.csv', index=False)
+print("Código executado com sucesso! Arquivo 'Dados_PowerBI_Final.csv' gerado.")
